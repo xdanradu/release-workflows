@@ -1,0 +1,43 @@
+name: Initialize Release
+
+on:
+  push:
+    branches:
+      - 'release/**'
+
+jobs:
+  create-gh-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Compute Tag Name
+        id: tag
+        run: |
+          # ref is refs/heads/release/xxx
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          # Strip 'release/' prefix for the tag to avoid ambiguities
+          TAG_NAME=${BRANCH_NAME#release/}
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create Release if not exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag_name }}
+          BRANCH: ${{ steps.tag.outputs.branch_name }}
+        run: |
+          # Check if release exists
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists. Skipping creation."
+          else
+            echo "Creating prerelease $TAG from $BRANCH"
+            gh release create "$TAG" \
+              --target "$BRANCH" \
+              --title "$TAG" \
+              --prerelease \
+              --generate-notes
+          fi

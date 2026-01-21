@@ -1,0 +1,48 @@
+name: Deploy to Staging (S1)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Simulate Deployment
+        run: echo "Deploying to s1 (Staging)... DONE"
+
+      - name: Update Release Tag
+        id: update-tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Current branch is the release branch (triggered on)
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          # Tag name logic: strip 'release/'
+          TAG_NAME=${BRANCH_NAME#release/}
+          
+          echo "Moving tag $TAG_NAME to HEAD of $BRANCH_NAME"
+          
+          # Force update tag locally
+          git tag -f "$TAG_NAME" HEAD
+          
+          # Force push tag to remote
+          git push origin "$TAG_NAME" --force
+          
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Fetch and Log Release Notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.update-tag.outputs.tag_name }}
+        run: |
+          echo "Fetching Release Notes for $TAG_NAME..."
+          gh release view "$TAG_NAME" --json body,url

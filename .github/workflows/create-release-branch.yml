@@ -1,0 +1,88 @@
+name: Create Release Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Type of release'
+        required: true
+        type: choice
+        default: 'release'
+        options:
+        - release
+        - hotfix
+      base_release:
+        description: 'Base Release Name for Hotfix (e.g. b2c-commerce-2025-32). Required if type is hotfix.'
+        required: false
+        type: string
+
+jobs:
+  create-branch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine Branch Name
+        id: name
+        run: |
+          TYPE="${{ inputs.type }}"
+          
+          if [ "$TYPE" == "release" ]; then
+            # Calculate Year and Week
+            YEAR=$(date +'%Y')
+            WEEK=$(date +'%V')
+            BRANCH_NAME="release/b2c-commerce-${YEAR}-${WEEK}"
+            SOURCE_REF="develop"
+            echo "Creating standard release branch: $BRANCH_NAME from $SOURCE_REF"
+            
+          elif [ "$TYPE" == "hotfix" ]; then
+            BASE_NAME="${{ inputs.base_release }}"
+            if [ -z "$BASE_NAME" ]; then
+              echo "Error: base_release is required for hotfix."
+              exit 1
+            fi
+            
+            # Pattern for hotfix branches: release/<base>-hotfix-<N>
+            # Find existing hotfixes to increment
+            # List remote branches matching pattern
+            MATCHING_BRANCHES=$(git branch -r | grep "origin/release/${BASE_NAME}-hotfix-" || true)
+            
+            if [ -z "$MATCHING_BRANCHES" ]; then
+              HOTFIX_NUM=1
+            else
+              # Extract numbers and find max
+              MAX_NUM=$(echo "$MATCHING_BRANCHES" | sed -E "s/.*-hotfix-([0-9]+)/\1/" | sort -nr | head -n 1)
+              HOTFIX_NUM=$((MAX_NUM + 1))
+            fi
+            
+            BRANCH_NAME="release/${BASE_NAME}-hotfix-${HOTFIX_NUM}"
+            # Hotfix should branch from the HEAD of the base release branch? 
+            # Or the latest hotfix? Usually hotfixes are cherry-picked or branched from the tag.
+            # Requirement says "release/b2c-commerce-2025-32-hotfix-1"
+            # It implies a separate branch. Let's assume it branches from the base release branch tip.
+            SOURCE_REF="origin/release/${BASE_NAME}"
+            
+            echo "Creating hotfix branch: $BRANCH_NAME from $SOURCE_REF"
+          fi
+
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "source_ref=$SOURCE_REF" >> $GITHUB_OUTPUT
+
+      - name: Create and Push Branch
+        run: |
+          BRANCH_NAME="${{ steps.name.outputs.branch_name }}"
+          SOURCE_REF="${{ steps.name.outputs.source_ref }}"
+          
+          git checkout -b "$BRANCH_NAME" "$SOURCE_REF"
+          git push origin "$BRANCH_NAME"

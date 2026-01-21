@@ -1,0 +1,50 @@
+name: Deploy to Production (P1)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Simulate Deployment
+        run: echo "Deploying to p1 (Production)... DONE"
+
+      - name: Sync Tag
+        id: sync-tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          TAG_NAME=${BRANCH_NAME#release/}
+          
+          # Ensure tag is at HEAD (Deployment Artifact)
+          git tag -f "$TAG_NAME" HEAD
+          git push origin "$TAG_NAME" --force
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Fetch and Log Release Notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.sync-tag.outputs.tag_name }}
+        run: |
+          echo "Fetching Release Notes for $TAG_NAME..."
+          gh release view "$TAG_NAME" --json body,url
+
+      - name: Finalize Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.sync-tag.outputs.tag_name }}
+        run: |
+          echo "Finalizing release $TAG_NAME"
+          # Set prerelease to false, and make it the latest release
+          gh release edit "$TAG_NAME" --prerelease=false --latest

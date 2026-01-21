@@ -16,4 +16,4 @@
     - On every deployment to s1, the release tag is moved again to the head of the release. 
     - Once the build is deployed to p1, the release should become final and immutable.
     - Provide all the required workflows (including a simulated (only logging) deployment to s1 and p1), as simple as possible, for the current repository
-    - Instead of main we use develop branch to create releases from
+    - Instead of main we use develop branch to create releases from which is already created in the repository
