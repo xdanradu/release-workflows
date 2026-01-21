@@ -15,8 +15,48 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Determines Release Branch
+        id: determine
+        run: |
+          CURRENT_BRANCH=${GITHUB_REF#refs/heads/}
+          echo "Current context: $CURRENT_BRANCH"
+          
+          if [[ "$CURRENT_BRANCH" == "develop" ]]; then
+            echo "On develop. Finding latest release or hotfix branch..."
+            git fetch --prune origin "+refs/heads/release/*:refs/remotes/origin/release/*"
+            
+            # Find latest release branch using version sort
+            LATEST_RELEASE=$(git branch -r --list "origin/release/*" | sed 's/ *origin\///' | sort -V | tail -n 1)
+            
+            if [ -z "$LATEST_RELEASE" ]; then
+              echo "Error: No release branches found to deploy."
+              exit 1
+            fi
+            
+            echo "Found latest release: $LATEST_RELEASE"
+            TARGET_BRANCH="$LATEST_RELEASE"
+            
+          elif [[ "$CURRENT_BRANCH" == release/* ]]; then
+            TARGET_BRANCH="$CURRENT_BRANCH"
+            echo "Deploying current release branch: $TARGET_BRANCH"
+          else
+            echo "Error: Deployment allowed only from 'develop' (deploys latest release) or directly from a 'release/' branch."
+            exit 1
+          fi
+          
+          echo "target_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Checkout Target Branch
+        env:
+          TARGET_BRANCH: ${{ steps.determine.outputs.target_branch }}
+        run: |
+          echo "Checking out $TARGET_BRANCH"
+          git checkout "$TARGET_BRANCH"
+
       - name: Simulate Deployment
-        run: echo "Deploying to p1 (Production)... DONE"
+        env:
+          TARGET_BRANCH: ${{ steps.determine.outputs.target_branch }}
+        run: echo "Deploying $TARGET_BRANCH to p1 (Production)... DONE"
 
       - name: Sync Tag
         id: sync-tag
@@ -24,7 +64,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          BRANCH_NAME="${{ steps.determine.outputs.target_branch }}"
           TAG_NAME=${BRANCH_NAME#release/}
           
           # Ensure tag is at HEAD (Deployment Artifact)
@@ -39,7 +79,11 @@ jobs:
           TAG_NAME: ${{ steps.sync-tag.outputs.tag_name }}
         run: |
           echo "Fetching Release Notes for $TAG_NAME..."
-          gh release view "$TAG_NAME" --json body,url
+          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            gh release view "$TAG_NAME" --json body,url
+          else
+            echo "Release $TAG_NAME not found. Skipping release notes fetching."
+          fi
 
       - name: Finalize Release
         env:
@@ -48,4 +92,8 @@ jobs:
         run: |
           echo "Finalizing release $TAG_NAME"
           # Set prerelease to false, and make it the latest release
-          gh release edit "$TAG_NAME" --prerelease=false --latest
+          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            gh release edit "$TAG_NAME" --prerelease=false --latest
+          else
+            echo "Release $TAG_NAME not found. Skipping finalization."
+          fi

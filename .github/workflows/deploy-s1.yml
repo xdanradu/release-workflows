@@ -15,8 +15,50 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Determines Release Branch
+        id: determine
+        run: |
+          CURRENT_BRANCH=${GITHUB_REF#refs/heads/}
+          echo "Current context: $CURRENT_BRANCH"
+          
+          if [[ "$CURRENT_BRANCH" == "develop" ]]; then
+            echo "On develop. Finding latest release or hotfix branch..."
+            # Ensure we know about all remote branches
+            git fetch --prune origin "+refs/heads/release/*:refs/remotes/origin/release/*"
+            
+            # Find latest release branch using version sort
+            # 'strip' removes leading whitespace/indentation from git branch output
+            LATEST_RELEASE=$(git branch -r --list "origin/release/*" | sed 's/ *origin\///' | sort -V | tail -n 1)
+            
+            if [ -z "$LATEST_RELEASE" ]; then
+              echo "Error: No release branches found to deploy."
+              exit 1
+            fi
+            
+            echo "Found latest release: $LATEST_RELEASE"
+            TARGET_BRANCH="$LATEST_RELEASE"
+            
+          elif [[ "$CURRENT_BRANCH" == release/* ]]; then
+            TARGET_BRANCH="$CURRENT_BRANCH"
+            echo "Deploying current release branch: $TARGET_BRANCH"
+          else
+            echo "Error: Deployment allowed only from 'develop' (deploys latest release) or directly from a 'release/' branch."
+            exit 1
+          fi
+          
+          echo "target_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Checkout Target Branch
+        env:
+          TARGET_BRANCH: ${{ steps.determine.outputs.target_branch }}
+        run: |
+          echo "Checking out $TARGET_BRANCH"
+          git checkout "$TARGET_BRANCH"
+
       - name: Simulate Deployment
-        run: echo "Deploying to s1 (Staging)... DONE"
+        env:
+          TARGET_BRANCH: ${{ steps.determine.outputs.target_branch }}
+        run: echo "Deploying $TARGET_BRANCH to s1 (Staging)... DONE"
 
       - name: Update Release Tag
         id: update-tag
@@ -24,8 +66,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Current branch is the release branch (triggered on)
-          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          BRANCH_NAME="${{ steps.determine.outputs.target_branch }}"
           # Tag name logic: strip 'release/'
           TAG_NAME=${BRANCH_NAME#release/}
           
@@ -45,4 +86,8 @@ jobs:
           TAG_NAME: ${{ steps.update-tag.outputs.tag_name }}
         run: |
           echo "Fetching Release Notes for $TAG_NAME..."
-          gh release view "$TAG_NAME" --json body,url
+          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            gh release view "$TAG_NAME" --json body,url
+          else
+            echo "Release $TAG_NAME not found. Skipping release notes fetching."
+          fi
