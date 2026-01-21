@@ -33,10 +33,30 @@ jobs:
           if [ -n "$INPUT_NAME" ]; then
              BRANCH_NAME="release/$INPUT_NAME"
           else
-             # Calculate Year and Week
+             # Auto-generate: Sequence based on Max Release Number for the Year
              YEAR=$(date +'%Y')
-             WEEK=$(date +'%V')
-             BRANCH_NAME="release/b2c-commerce-${YEAR}-${WEEK}"
+             
+             # Find existing releases for this year
+             # Match: origin/release/b2c-commerce-YYYY-NN...
+             # Filter branches
+             EXISTING=$(git branch -r | grep "origin/release/b2c-commerce-${YEAR}-" || true)
+             
+             if [ -z "$EXISTING" ]; then
+                # No releases this year, start at 1
+                NEXT_NUM=1
+             else
+                # Extract release numbers. 
+                # Regex matches number after 'b2c-commerce-YYYY-'. 
+                # Handles '...-39' and '...-39-hotfix-1' correctly by capturing only the first number group after year.
+                MAX_NUM=$(echo "$EXISTING" | sed -E "s/.*b2c-commerce-${YEAR}-([0-9]+).*/\1/" | sort -nr | head -n 1)
+                
+                # Default to 0 if something failed in parse (safety)
+                if [ -z "$MAX_NUM" ]; then MAX_NUM=0; fi
+                
+                NEXT_NUM=$((MAX_NUM + 1))
+             fi
+             
+             BRANCH_NAME="release/b2c-commerce-${YEAR}-${NEXT_NUM}"
           fi
           SOURCE_REF="develop"
           echo "Creating standard release branch: $BRANCH_NAME from $SOURCE_REF"

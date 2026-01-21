@@ -27,7 +27,7 @@ jobs:
       - name: Determine Branch Name
         id: name
         run: |
-          # Strip 'release/' prefix if user provided full branch name
+          # Strip 'release/' prefix if user provided full branch name by mistake
           INPUT_VAL="${{ inputs.base_release }}"
           BASE_NAME=${INPUT_VAL#release/}
           
