@@ -29,7 +29,8 @@ jobs:
           
           # Ensure tag is at HEAD (Deployment Artifact)
           git tag -f "$TAG_NAME" HEAD
-          git push origin "$TAG_NAME" --force
+          # Use refs/tags/ to avoid ambiguity if a branch has same name
+          git push origin "refs/tags/$TAG_NAME" --force
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Fetch and Log Release Notes
