@@ -11,8 +11,8 @@ on:
         options:
         - release
         - hotfix
-      base_release:
-        description: 'Base Release Name for Hotfix (e.g. b2c-commerce-2025-32). Required if type is hotfix.'
+      release_name:
+        description: 'Release Name (e.g. b2c-commerce-2025-32). For "release", overrides auto-gen. For "hotfix", this is the base release.'
         required: false
         type: string
 
@@ -37,19 +37,24 @@ jobs:
         id: name
         run: |
           TYPE="${{ inputs.type }}"
+          INPUT_NAME="${{ inputs.release_name }}"
           
           if [ "$TYPE" == "release" ]; then
-            # Calculate Year and Week
-            YEAR=$(date +'%Y')
-            WEEK=$(date +'%V')
-            BRANCH_NAME="release/b2c-commerce-${YEAR}-${WEEK}"
+            if [ -n "$INPUT_NAME" ]; then
+               BRANCH_NAME="release/$INPUT_NAME"
+            else
+               # Calculate Year and Week
+               YEAR=$(date +'%Y')
+               WEEK=$(date +'%V')
+               BRANCH_NAME="release/b2c-commerce-${YEAR}-${WEEK}"
+            fi
             SOURCE_REF="develop"
             echo "Creating standard release branch: $BRANCH_NAME from $SOURCE_REF"
             
           elif [ "$TYPE" == "hotfix" ]; then
-            BASE_NAME="${{ inputs.base_release }}"
+            BASE_NAME="$INPUT_NAME"
             if [ -z "$BASE_NAME" ]; then
-              echo "Error: base_release is required for hotfix."
+              echo "Error: release_name is required for hotfix."
               exit 1
             fi
             
