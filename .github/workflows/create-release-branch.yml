@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_name:
-        description: 'Release Name (e.g. b2c-commerce-2025-32). Leave empty to auto-generate.'
+        description: 'Release Name (e.g. b2c-commerce-2025-32). Leave empty to auto-generate using the current year and next sequence number.'
         required: false
         type: string
 
