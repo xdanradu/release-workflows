@@ -1,0 +1,63 @@
+name: Create Hotfix Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_release:
+        description: 'Base Release Name (e.g. b2c-commerce-2025-32). The hotfix will be based on this release.'
+        required: true
+        type: string
+
+jobs:
+  create-hotfix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine Branch Name
+        id: name
+        run: |
+          BASE_NAME="${{ inputs.base_release }}"
+          
+          # Pattern for hotfix branches: release/<base>-hotfix-<N>
+          # Find existing hotfixes to increment
+          # List remote branches matching pattern
+          MATCHING_BRANCHES=$(git branch -r | grep "origin/release/${BASE_NAME}-hotfix-" || true)
+          
+          if [ -z "$MATCHING_BRANCHES" ]; then
+            HOTFIX_NUM=1
+            SOURCE_REF="origin/release/${BASE_NAME}"
+          else
+            # Extract numbers and find max
+            MAX_NUM=$(echo "$MATCHING_BRANCHES" | sed -E "s/.*-hotfix-([0-9]+)/\1/" | sort -nr | head -n 1)
+            HOTFIX_NUM=$((MAX_NUM + 1))
+            SOURCE_REF="origin/release/${BASE_NAME}-hotfix-${MAX_NUM}"
+          fi
+          
+          BRANCH_NAME="release/${BASE_NAME}-hotfix-${HOTFIX_NUM}"
+          
+          echo "Creating hotfix branch: $BRANCH_NAME from $SOURCE_REF"
+
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "source_ref=$SOURCE_REF" >> $GITHUB_OUTPUT
+
+      - name: Create and Push Branch
+        run: |
+          BRANCH_NAME="${{ steps.name.outputs.branch_name }}"
+          SOURCE_REF="${{ steps.name.outputs.source_ref }}"
+          
+          # Ensure we have the source ref available locally
+          git fetch origin
+          
+          git checkout -b "$BRANCH_NAME" "$SOURCE_REF"
+          git push origin "$BRANCH_NAME"

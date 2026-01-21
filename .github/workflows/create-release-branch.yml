@@ -1,18 +1,10 @@
-name: Create Release or Hotfix Branch
+name: Create Release Branch
 
 on:
   workflow_dispatch:
     inputs:
-      type:
-        description: 'Type of release'
-        required: true
-        type: choice
-        default: 'release'
-        options:
-        - release
-        - hotfix
       release_name:
-        description: 'Initial Release Branch will be created from develop. Release Name (e.g. b2c-commerce-2025-32). For "release", overrides auto-gen. For "hotfix", this is the base release branch name (e.g. b2c-commerce-2025-32).'
+        description: 'Release Name (e.g. b2c-commerce-2025-32). Leave empty to auto-generate.'
         required: false
         type: string
 
@@ -36,47 +28,18 @@ jobs:
       - name: Determine Branch Name
         id: name
         run: |
-          TYPE="${{ inputs.type }}"
           INPUT_NAME="${{ inputs.release_name }}"
           
-          if [ "$TYPE" == "release" ]; then
-            if [ -n "$INPUT_NAME" ]; then
-               BRANCH_NAME="release/$INPUT_NAME"
-            else
-               # Calculate Year and Week
-               YEAR=$(date +'%Y')
-               WEEK=$(date +'%V')
-               BRANCH_NAME="release/b2c-commerce-${YEAR}-${WEEK}"
-            fi
-            SOURCE_REF="develop"
-            echo "Creating standard release branch: $BRANCH_NAME from $SOURCE_REF"
-            
-          elif [ "$TYPE" == "hotfix" ]; then
-            BASE_NAME="$INPUT_NAME"
-            if [ -z "$BASE_NAME" ]; then
-              echo "Error: release_name is required for hotfix."
-              exit 1
-            fi
-            
-            # Pattern for hotfix branches: release/<base>-hotfix-<N>
-            # Find existing hotfixes to increment
-            # List remote branches matching pattern
-            MATCHING_BRANCHES=$(git branch -r | grep "origin/release/${BASE_NAME}-hotfix-" || true)
-            
-            if [ -z "$MATCHING_BRANCHES" ]; then
-              HOTFIX_NUM=1
-              SOURCE_REF="origin/release/${BASE_NAME}"
-            else
-              # Extract numbers and find max
-              MAX_NUM=$(echo "$MATCHING_BRANCHES" | sed -E "s/.*-hotfix-([0-9]+)/\1/" | sort -nr | head -n 1)
-              HOTFIX_NUM=$((MAX_NUM + 1))
-              SOURCE_REF="origin/release/${BASE_NAME}-hotfix-${MAX_NUM}"
-            fi
-            
-            BRANCH_NAME="release/${BASE_NAME}-hotfix-${HOTFIX_NUM}"
-            
-            echo "Creating hotfix branch: $BRANCH_NAME from $SOURCE_REF"
+          if [ -n "$INPUT_NAME" ]; then
+             BRANCH_NAME="release/$INPUT_NAME"
+          else
+             # Calculate Year and Week
+             YEAR=$(date +'%Y')
+             WEEK=$(date +'%V')
+             BRANCH_NAME="release/b2c-commerce-${YEAR}-${WEEK}"
           fi
+          SOURCE_REF="develop"
+          echo "Creating standard release branch: $BRANCH_NAME from $SOURCE_REF"
 
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
           echo "source_ref=$SOURCE_REF" >> $GITHUB_OUTPUT
