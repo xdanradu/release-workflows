@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       base_release:
-        description: 'Base Release Name (e.g. b2c-commerce-2025-32). The hotfix will be based on this release.'
+        description: 'Base Release Name only (e.g. b2c-commerce-2025-32). The hotfix will be based on this release and the version will be auto generated from the latest hotfix branch of the selected release.'
         required: true
         type: string
 
