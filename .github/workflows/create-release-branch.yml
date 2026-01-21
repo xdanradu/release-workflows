@@ -65,18 +65,15 @@ jobs:
             
             if [ -z "$MATCHING_BRANCHES" ]; then
               HOTFIX_NUM=1
+              SOURCE_REF="origin/release/${BASE_NAME}"
             else
               # Extract numbers and find max
               MAX_NUM=$(echo "$MATCHING_BRANCHES" | sed -E "s/.*-hotfix-([0-9]+)/\1/" | sort -nr | head -n 1)
               HOTFIX_NUM=$((MAX_NUM + 1))
+              SOURCE_REF="origin/release/${BASE_NAME}-hotfix-${MAX_NUM}"
             fi
             
             BRANCH_NAME="release/${BASE_NAME}-hotfix-${HOTFIX_NUM}"
-            # Hotfix should branch from the HEAD of the base release branch? 
-            # Or the latest hotfix? Usually hotfixes are cherry-picked or branched from the tag.
-            # Requirement says "release/b2c-commerce-2025-32-hotfix-1"
-            # It implies a separate branch. Let's assume it branches from the base release branch tip.
-            SOURCE_REF="origin/release/${BASE_NAME}"
             
             echo "Creating hotfix branch: $BRANCH_NAME from $SOURCE_REF"
           fi
