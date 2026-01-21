@@ -27,7 +27,9 @@ jobs:
       - name: Determine Branch Name
         id: name
         run: |
-          BASE_NAME="${{ inputs.base_release }}"
+          # Strip 'release/' prefix if user provided full branch name
+          INPUT_VAL="${{ inputs.base_release }}"
+          BASE_NAME=${INPUT_VAL#release/}
           
           # Pattern for hotfix branches: release/<base>-hotfix-<N>
           # Find existing hotfixes to increment
