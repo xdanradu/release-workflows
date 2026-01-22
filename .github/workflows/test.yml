@@ -75,7 +75,9 @@ jobs:
         env:
           TARGET_BRANCH: ${{ steps.determine.outputs.target_branch }}
         run: |
-          echo "Checking out $TARGET_BRANCH"
+          echo "Fetch and checkout $TARGET_BRANCH"
+          # Fetch the specific branch from origin
+          git fetch origin "$TARGET_BRANCH"
           git checkout "$TARGET_BRANCH"
 
       - id: sync-tag
