@@ -3,7 +3,7 @@ run-name: Deploy to s1
 on:
   workflow_dispatch:
 jobs:
-  build-and-deploy-to-s1:
+  sap-commerce-ccv2-deployment:
     uses: ./.github/workflows/test.yml
     with:
       branch: "release/*"
