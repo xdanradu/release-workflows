@@ -2,6 +2,8 @@ name: call-deploy-to-s1
 run-name: Deploy to s1
 on:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   sap-commerce-ccv2-deployment:
     uses: ./.github/workflows/test.yml
