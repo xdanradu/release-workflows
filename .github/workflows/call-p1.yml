@@ -1,5 +1,5 @@
-name: call-deploy-to-s1
-run-name: Deploy to s1
+name: Deploy to p1 (latest)
+run-name: Deploy to p1 
 on:
   workflow_dispatch:
 permissions:
@@ -9,5 +9,5 @@ jobs:
     uses: ./.github/workflows/test.yml
     with:
       branch: "release/*"
-      target: s1
+      target: p1
       sinceHours: 24

@@ -1,0 +1,13 @@
+name: Deploy to s1 (pre release)
+run-name: Deploy to s1 
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sap-commerce-ccv2-deployment:
+    uses: ./.github/workflows/test.yml
+    with:
+      branch: "release/*"
+      target: s1
+      sinceHours: 24
