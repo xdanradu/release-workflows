@@ -33,7 +33,9 @@ jobs:
       - run: git branch -r --list --sort=-committerdate | head -n 100
       - id: get_commit_count_step 
         name: Get commits in last x hours on branch
-        run: ./.github/scripts/check-activity.sh ${{ inputs.branch }} ${{ inputs.sinceHours }}
+        run: |
+          chmod +x .github/scripts/check-activity.sh
+          ./.github/scripts/check-activity.sh ${{ inputs.branch }} ${{ inputs.sinceHours }}
   build_commerce:
     name: Build SAP Commerce
     needs: check_activity
