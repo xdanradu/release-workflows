@@ -1,0 +1,141 @@
+name: sap-commerce-ccv2-deployment
+run-name: Deploy to SAP Commerce Cloud
+on:
+  workflow_call:
+    inputs:
+      branch:
+        required: true
+        type: string
+      target:
+        required: true
+        type: string
+      sinceHours:
+        required: true
+        type: number
+
+permissions:
+  contents: write
+
+jobs:
+  check_activity:
+    name: Check commit activity
+    runs-on: ubuntu-latest
+    outputs:
+      new_commit_count: ${{ steps.get_commit_count_step.outputs.new_commit_count }}
+      branch_name: ${{ steps.get_commit_count_step.outputs.branch_name }}
+    steps:
+      - id: checkout_step
+        name: Checkout the main GitHub branch to get scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+          fetch-depth: 0
+      - run: git branch -r --list --sort=-committerdate | head -n 100
+      - id: get_commit_count_step 
+        name: Get commits in last x hours on branch
+        run: ./.github/scripts/check-activity.sh ${{ inputs.branch }} ${{ inputs.sinceHours }}
+  build_commerce:
+    name: Build SAP Commerce
+    needs: check_activity
+    if: ${{ needs.check_activity.outputs.new_commit_count > 0 }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout_step
+        name: Checkout the main GitHub branch to get scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+  deploy_simulation:
+    name: Deploy SAP Commerce to CCV simulation
+    needs: [check_activity, build_commerce]
+    runs-on: ubuntu-latest
+    env:
+      TARGET: ${{ inputs.target }}
+      BRANCH: ${{ needs.check_activity.outputs.branch_name }}
+    steps:
+      - id: checkout_step
+        name: Checkout the main GitHub branch to get scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - id: deploy_simulation_step
+        name: Deploy SAP Commerce on CCV2 simulation
+        run: ./.github/scripts/deploy-sap-commerce.sh $BUILD_CODE $TARGET $DATABASE_ACTION
+        shell: bash
+      - id: sleep
+        name: Sleep for 2 seconds
+        uses: jakejarvis/wait-action@master
+        with:
+          time: '2s'
+
+      - id: determine
+        name: Determines Release Branch
+        run: |          
+          TARGET_BRANCH="${{ needs.check_activity.outputs.branch_name }}"
+          echo "target_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+
+      - id:  checkout_target_branch
+        name: Checkout Target Branch
+        env:
+          TARGET_BRANCH: ${{ steps.determine.outputs.target_branch }}
+        run: |
+          echo "Checking out $TARGET_BRANCH"
+          git checkout "$TARGET_BRANCH"
+
+      - id: sync-tag
+        name: Sync Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          BRANCH_NAME="${{ steps.determine.outputs.target_branch }}"
+          TAG_NAME=${BRANCH_NAME#release/}
+          
+          # Ensure tag is at HEAD (Deployment Artifact)
+          git tag -f "$TAG_NAME" HEAD
+          # Use refs/tags/ to avoid ambiguity if a branch has same name
+          git push origin "refs/tags/$TAG_NAME" --force
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - id: fetch-and-log-release-notes
+        name: Fetch and Log Release Notes on s1 (prerelease)
+        if: inputs.target == 's1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.sync-tag.outputs.tag_name }}
+          TARGET_BRANCH: ${{ steps.determine.outputs.target_branch }}
+        run: |
+          echo "Fetching Release Notes for $TAG_NAME..."
+          if ! gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            echo "Release $TAG_NAME not found. Creating it now..."
+            gh release create "$TAG_NAME" \
+              --target "$TARGET_BRANCH" \
+              --title "$TAG_NAME" \
+              --prerelease \
+              --generate-notes
+          fi
+          
+          gh release view "$TAG_NAME" --json body,url
+
+
+      - id: finalize_release
+        name: Finalize Release on p1 (latest)
+        if: inputs.target == 'p1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.sync-tag.outputs.tag_name }}
+          TARGET_BRANCH: ${{ steps.determine.outputs.target_branch }}
+        run: |
+          echo "Finalizing release $TAG_NAME"
+          
+          # Check if release exists (it should, from previous step, but be safe)
+          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            gh release edit "$TAG_NAME" --prerelease=false --latest
+          else
+            # Fallback (unlikely)
+            gh release create "$TAG_NAME" \
+              --target "$TARGET_BRANCH" \
+              --title "$TAG_NAME" \
+              --generate-notes \
+              --latest
+          fi
